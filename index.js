@@ -376,14 +376,14 @@ async function startBot() {
 
 startBot();
 // Graceful shutdown on SIGINT and SIGTERM
-process.on("SIGINT", () => {
-  console.log("Bot is shutting down...");
-  client.destroy();
-  process.exit(0);
-});
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-process.on("SIGTERM", () => {
-  console.log("Bot is shutting down...");
+function shutdown(signal) {
+  console.log(`Received ${signal}. Bot and MC WS Client are shutting down...`);
+  if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
+    mcWsClient.close(1000, "Bot shutting down");
+  }
   client.destroy();
-  process.exit(0);
-});
+  setTimeout(() => process.exit(0), 500);
+}
