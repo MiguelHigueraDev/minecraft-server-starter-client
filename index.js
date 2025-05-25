@@ -227,6 +227,32 @@ async function handlePowerOnCommand(respondFunction) {
   }
 }
 
+async function attemptPowerOnForServerStart(channel) {
+  const macAddressStrEnv = process.env.MAC_ADDRESS;
+
+  if (!macAddressStrEnv) {
+    await channel.send(
+      "Cannot wake PC: MAC address environment variable not set!"
+    );
+    return false;
+  }
+
+  try {
+    const validatedMacAddress = parseMacAddress(macAddressStrEnv);
+    wol.wake(validatedMacAddress);
+    await channel.send(
+      `No connection to server manager. Attempting to wake PC and will retry connection...`
+    );
+
+    setTimeout(connectToMcServer, 30000); // Retry connection after 30 seconds
+    return true;
+  } catch (e) {
+    console.error("Failed to wake PC for server start:", e);
+    await channel.send(`Failed to wake PC: ${e.message}`);
+    return false;
+  }
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -292,9 +318,13 @@ client.on("messageCreate", async (message) => {
       mcWsClient.send(JSON.stringify({ type: "startserver" }));
       message.channel.send("Attempting to start Minecraft server...");
     } else {
-      message.channel.send(
-        "Not connected to Minecraft server manager. Please wait or check its status."
-      );
+      // Try to wake up the PC automatically
+      const wakeAttempted = await attemptPowerOnForServerStart(message.channel);
+      if (!wakeAttempted) {
+        message.channel.send(
+          "Not connected to Minecraft server manager and cannot wake PC. Please check the server status manually."
+        );
+      }
     }
   } else if (message.content === "!mcstop") {
     if (!isOwner(message.author.id)) return;
