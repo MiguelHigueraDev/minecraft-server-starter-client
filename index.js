@@ -295,7 +295,7 @@ async function handlePowerOnCommand(respondFunction) {
     const validatedMacAddress = parseMacAddress(macAddressStrEnv);
 
     wol.wake(validatedMacAddress);
-    const response = `Magic packet sent to ${validatedMacAddress}!`;
+    const response = `Magic packet sent!`;
     await respondFunction(response);
   } catch (e) {
     console.error("Failed to process power-on command:", e);
@@ -304,9 +304,7 @@ async function handlePowerOnCommand(respondFunction) {
     if (e.message.toLowerCase().includes("mac address")) {
       userErrorMessage = `Invalid MAC address format in environment: '${macAddressStrEnv}'. Error: ${e.message}. Expected format: HH:HH:HH:HH:HH:HH or HH-HH-HH-HH-HH-HH.`;
     } else {
-      userErrorMessage = `Failed to send magic packet to ${macAddressStrEnv}: ${
-        e.message || e
-      }`;
+      userErrorMessage = `Failed to send magic packet ${e.message || e}`;
     }
 
     try {
