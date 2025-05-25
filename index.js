@@ -331,7 +331,7 @@ async function attemptPowerOnForServerStart(channel) {
     const validatedMacAddress = parseMacAddress(macAddressStrEnv);
     wol.wake(validatedMacAddress);
     await channel.send(
-      `No connection to server manager. Attempting to wake PC (${validatedMacAddress}) and will retry connection...`
+      `No connection to server manager. Attempting to wake PC and will retry connection...`
     );
 
     // Give some time for PC to boot before attempting connection
