@@ -286,8 +286,8 @@ client.on("messageCreate", async (message) => {
     });
   }
 
+  // Allow non-owners to only start the server
   if (message.content === "!mcstart") {
-    if (!isOwner(message.author.id)) return;
     if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
       mcWsClient.send(JSON.stringify({ type: "startserver" }));
       message.channel.send("Attempting to start Minecraft server...");
@@ -295,6 +295,34 @@ client.on("messageCreate", async (message) => {
       message.channel.send(
         "Not connected to Minecraft server manager. Please wait or check its status."
       );
+    }
+  } else if (message.content === "!mcstop") {
+    if (!isOwner(message.author.id)) return;
+    if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
+      mcWsClient.send(JSON.stringify({ type: "stopserver" }));
+      message.channel.send("Attempting to stop Minecraft server...");
+    } else {
+      message.channel.send(
+        "Not connected to Minecraft server manager. Please wait or check its status."
+      );
+    }
+  } else if (message.content.startsWith("!mccmd")) {
+    if (!isOwner(message.author.id)) return;
+    const command = message.content.substring("!mccmd ".length).trim();
+    if (command) {
+      if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
+        mcWsClient.send(JSON.stringify({ type: "sendcommand", command }));
+        message.channel.send(
+          `Sent \`${command}\` command to Minecraft server:`
+        );
+      } else {
+        message.channel.send(
+          "Not connected to Minecraft server manager. Please wait or check its status."
+        );
+      }
+    } else {
+      message.channel.send("Please provide a command to send to the server.");
+      return;
     }
   }
 });
@@ -347,7 +375,6 @@ async function startBot() {
 }
 
 startBot();
-
 // Graceful shutdown on SIGINT and SIGTERM
 process.on("SIGINT", () => {
   console.log("Bot is shutting down...");
