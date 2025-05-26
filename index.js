@@ -250,7 +250,8 @@ function handleMcServerMessage(message) {
   }
 
   if (discordMessage && discordMessage.length > 0) {
-    sendToDiscordChannel(discordMessage);
+    // Disable messages for now
+    // sendToDiscordChannel(discordMessage);
   }
 }
 
@@ -381,15 +382,7 @@ client.on("messageCreate", async (message) => {
     return true;
   }
 
-  if (
-    message.content.startsWith("!poweron") ||
-    message.content.startsWith("!button") ||
-    message.content.startsWith("!mc")
-  ) {
-    lastCommandChannel = message.channel;
-  }
-  // Everyone can use !mcstart, but we want to track the last command channel for it too
-  if (message.content.startsWith("!mcstart")) {
+  if (message.content.startsWith("!buttons")) {
     lastCommandChannel = message.channel;
   }
 
@@ -398,67 +391,31 @@ client.on("messageCreate", async (message) => {
     await handlePowerOnCommand((content) => message.channel.send(content));
   }
 
-  if (message.content === "!button") {
+  if (message.content === "!buttons") {
     if (!isOwner(message.author.id)) return;
-    const powerOnButton = new ButtonBuilder()
-      .setCustomId("poweron")
-      .setLabel("Power On PC")
-      .setStyle(ButtonStyle.Success);
-    const row = new ActionRowBuilder().addComponents(powerOnButton);
+    const startServerButton = new ButtonBuilder()
+      .setCustomId("startserver")
+      .setLabel("Start Minecraft Server")
+      .setStyle(ButtonStyle.Primary);
+    const stopServerButton = new ButtonBuilder()
+      .setCustomId("stopserver")
+      .setLabel("Stop Minecraft Server")
+      .setStyle(ButtonStyle.Danger);
+    const row = new ActionRowBuilder().addComponents(
+      startServerButton,
+      stopServerButton
+    );
     await message.channel.send({
-      content: "Click the button to power on the PC!",
+      content: "",
       components: [row],
     });
-  }
-
-  // Allow non-owners to only start the server
-  if (message.content === "!mcstart") {
-    if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
-      mcWsClient.send(JSON.stringify({ type: "startserver" }));
-      message.channel.send("Attempting to start Minecraft server...");
-    } else {
-      const wakeAttempted = await attemptPowerOnForServerStart(message.channel);
-      if (!wakeAttempted) {
-        message.channel.send(
-          "Not connected to Minecraft server manager and cannot wake PC. Please check the server status manually or try !poweron if authorized."
-        );
-      }
-    }
-  } else if (message.content === "!mcstop") {
-    if (!isOwner(message.author.id)) return;
-    if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
-      mcWsClient.send(JSON.stringify({ type: "stopserver" }));
-      message.channel.send("Attempting to stop Minecraft server...");
-    } else {
-      message.channel.send(
-        "Not connected to Minecraft server manager. Please wait or check its status."
-      );
-    }
-  } else if (message.content.startsWith("!mccmd")) {
-    if (!isOwner(message.author.id)) return;
-    const command = message.content.substring("!mccmd ".length).trim();
-    if (command) {
-      if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
-        mcWsClient.send(JSON.stringify({ type: "sendcommand", command }));
-        message.channel.send(
-          `Sent \`${command}\` command to Minecraft server.` // Removed colon for brevity
-        );
-      } else {
-        message.channel.send(
-          "Not connected to Minecraft server manager. Please wait or check its status."
-        );
-      }
-    } else {
-      message.channel.send("Please provide a command to send to the server.");
-      return;
-    }
   }
 });
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
-  if (interaction.customId === "poweron") {
+  if (interaction.customId === "stopserver") {
     lastCommandChannel = interaction.channel; // Update last command channel
 
     if (!OWNER_DISCORD_ID) {
@@ -486,9 +443,28 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    await handlePowerOnCommand((content) =>
-      interaction.reply({ content, flags: MessageFlags.Ephemeral })
-    );
+    mcWsClient.send(JSON.stringify({ type: "stopserver" }));
+  } else if (interaction.customId === "startserver") {
+    lastCommandChannel = interaction.channel;
+
+    if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
+      mcWsClient.send(JSON.stringify({ type: "startserver" }));
+      await interaction.reply({
+        content: "Attempting to start Minecraft server...",
+        flags: MessageFlags.Ephemeral,
+      });
+    } else {
+      const wakeAttempted = await attemptPowerOnForServerStart(
+        interaction.channel
+      );
+      if (!wakeAttempted) {
+        await interaction.reply({
+          content:
+            "Not connected to Minecraft server manager and cannot wake PC. Please check the server status manually or try !poweron if authorized.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
   }
 });
 
