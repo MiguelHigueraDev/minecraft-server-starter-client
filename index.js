@@ -444,6 +444,11 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     mcWsClient.send(JSON.stringify({ type: "stopserver" }));
+
+    await interaction.reply({
+      content: "Attempting to stop Minecraft server...",
+      flags: MessageFlags.Ephemeral,
+    });
   } else if (interaction.customId === "startserver") {
     lastCommandChannel = interaction.channel;
 
