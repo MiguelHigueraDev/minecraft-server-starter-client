@@ -22,7 +22,6 @@ const OWNER_DISCORD_ID = process.env.OWNER_DISCORD_ID;
 const MC_SERVER_WS_URL = process.env.MC_SERVER_WS_URL ?? "ws://localhost:8080";
 
 let mcWsClient = null;
-let lastCommandChannel = null;
 let heartbeatIntervalId = null;
 let pongTimeoutId = null;
 let isShuttingDown = false; // Flag to prevent reconnections during shutdown
@@ -143,13 +142,6 @@ function connectToMcServer() {
       );
       // Update activity to show there's a communication issue with the MC server WS
       updateBotActivity("MC: Data Error", ActivityType.Watching);
-      // Still send the unparseable data to Discord for debugging
-      sendToDiscordChannel(
-        `Received unparseable data from MC Server: ${data
-          .toString()
-          .substring(0, 100)}`,
-        false
-      );
     }
   });
 
@@ -201,48 +193,6 @@ function scheduleReconnect() {
     } seconds...`
   );
   setTimeout(connectToMcServer, RECONNECTION_DELAY_MS);
-}
-
-function sendToDiscordChannel(content, isSystemMessage = false) {
-  const messageContent = "```\n" + content + "\n```";
-  if (lastCommandChannel) {
-    lastCommandChannel.send(messageContent).catch((err) => {
-      console.error("Error sending to lastCommandChannel:", err);
-      findAndSendToDefaultChannel(messageContent);
-    });
-  } else if (isSystemMessage) {
-    findAndSendToDefaultChannel(messageContent);
-  }
-}
-
-function findAndSendToDefaultChannel(content) {
-  if (client && client.isReady()) {
-    const guild = client.guilds.cache.first();
-    if (guild) {
-      let targetChannel = guild.channels.cache.find(
-        (ch) =>
-          ch.name === "general" &&
-          ch.isTextBased() &&
-          ch.permissionsFor(guild.members.me).has("SendMessages")
-      );
-      if (!targetChannel) {
-        targetChannel = guild.channels.cache.find(
-          (ch) =>
-            ch.isTextBased() &&
-            ch.permissionsFor(guild.members.me).has("SendMessages")
-        );
-      }
-
-      if (targetChannel) {
-        targetChannel.send(content).catch(console.error);
-        return;
-      }
-    }
-  }
-  console.log(
-    "MC Server Update (no suitable default Discord channel found):",
-    content.replace(/`/g, "")
-  );
 }
 
 function handleMcServerMessage(message) {
@@ -362,7 +312,6 @@ client.on("messageCreate", async (message) => {
     message.content.startsWith("!startserver") ||
     message.content.startsWith("!stopserver")
   ) {
-    lastCommandChannel = message.channel;
   }
 
   if (message.content === "!poweron") {
@@ -393,8 +342,6 @@ client.on("messageCreate", async (message) => {
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
-
-  lastCommandChannel = interaction.channel; // Update for any button interaction
 
   if (interaction.customId === "stopserver") {
     if (!OWNER_DISCORD_ID) {
