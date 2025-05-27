@@ -11,265 +11,24 @@ import {
 import wol from "wake_on_lan";
 import WebSocket from "ws";
 
-// Constants
-const RECONNECTION_DELAY_MS = 10000; // 10 seconds
-const HEARTBEAT_INTERVAL_MS = 5000; // Send ping every 5 seconds
-const HEARTBEAT_PONG_TIMEOUT_MS = 3000; // Expect pong within 3 seconds
-const MAX_ACTIVITY_LENGTH = 128;
+// Configuration
+const config = {
+  token: process.env.DISCORD_TOKEN,
+  ownerId: process.env.OWNER_DISCORD_ID,
+  wsUrl: process.env.MC_SERVER_WS_URL ?? "ws://localhost:8080",
+  macAddress: process.env.MAC_ADDRESS,
+  reconnectDelay: 10000,
+  heartbeatInterval: 5000,
+  pongTimeout: 3000,
+  maxActivityLength: 128,
+  wakeRetryDelay: 20000,
+};
 
-const TOKEN = process.env.DISCORD_TOKEN;
-const OWNER_DISCORD_ID = process.env.OWNER_DISCORD_ID;
-const MC_SERVER_WS_URL = process.env.MC_SERVER_WS_URL ?? "ws://localhost:8080";
-
+// State
 let mcWsClient = null;
 let heartbeatIntervalId = null;
 let pongTimeoutId = null;
-let isShuttingDown = false; // Flag to prevent reconnections during shutdown
-
-function updateBotActivity(statusText, activityType = ActivityType.Playing) {
-  if (client && client.isReady() && client.user) {
-    try {
-      let finalStatusText = statusText;
-      if (finalStatusText.length > MAX_ACTIVITY_LENGTH) {
-        finalStatusText =
-          finalStatusText.substring(0, MAX_ACTIVITY_LENGTH - 3) + "...";
-      }
-      client.user.setActivity(finalStatusText, { type: activityType });
-    } catch (error) {
-      console.error("Failed to set bot activity:", error);
-    }
-  }
-}
-
-function stopHeartbeat() {
-  if (heartbeatIntervalId) {
-    clearInterval(heartbeatIntervalId);
-    heartbeatIntervalId = null;
-  }
-  if (pongTimeoutId) {
-    clearTimeout(pongTimeoutId);
-    pongTimeoutId = null;
-  }
-}
-
-function startHeartbeat() {
-  stopHeartbeat();
-
-  if (!mcWsClient || mcWsClient.readyState !== WebSocket.OPEN) {
-    console.log("Cannot start heartbeat: WebSocket is not open.");
-    return;
-  }
-
-  heartbeatIntervalId = setInterval(() => {
-    if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
-      try {
-        mcWsClient.send(JSON.stringify({ type: "ping" }));
-
-        if (pongTimeoutId) clearTimeout(pongTimeoutId);
-        pongTimeoutId = setTimeout(() => {
-          console.warn(
-            "WebSocket pong not received in time. Terminating connection."
-          );
-          if (mcWsClient) {
-            mcWsClient.terminate(); // This will trigger 'close' event
-          }
-        }, HEARTBEAT_PONG_TIMEOUT_MS);
-      } catch (err) {
-        console.error("Error sending WebSocket ping:", err);
-        if (mcWsClient) mcWsClient.terminate();
-      }
-    } else {
-      stopHeartbeat();
-    }
-  }, HEARTBEAT_INTERVAL_MS);
-}
-
-function connectToMcServer() {
-  if (isShuttingDown) {
-    console.log(
-      "Shutdown in progress, not attempting to connect to MC server."
-    );
-    return;
-  }
-  if (
-    mcWsClient &&
-    (mcWsClient.readyState === WebSocket.OPEN ||
-      mcWsClient.readyState === WebSocket.CONNECTING)
-  ) {
-    console.log(
-      "Already connected or connecting to the Minecraft WebSocket server."
-    );
-    return;
-  }
-
-  console.log("Attempting to connect to Minecraft WebSocket server...");
-  updateBotActivity("MC: Connecting...", ActivityType.Watching);
-  try {
-    mcWsClient = new WebSocket(MC_SERVER_WS_URL);
-  } catch (error) {
-    console.error("Error creating WebSocket client instance:", error);
-    stopHeartbeat();
-    mcWsClient = null;
-    updateBotActivity("MC: Connection Failed", ActivityType.Watching);
-    if (!isShuttingDown) scheduleReconnect();
-    return;
-  }
-
-  mcWsClient.on("open", () => {
-    console.log("Connected to Minecraft WebSocket server.");
-    updateBotActivity("MC: Connected", ActivityType.Watching);
-    startHeartbeat();
-  });
-
-  mcWsClient.on("message", (data) => {
-    try {
-      const rawDataString = data.toString();
-      const message = JSON.parse(rawDataString);
-      console.log("Received from MC WS Server:", message);
-
-      if (message.type === "pong") {
-        if (pongTimeoutId) {
-          clearTimeout(pongTimeoutId);
-          pongTimeoutId = null;
-        }
-        return;
-      }
-      handleMcServerMessage(message);
-    } catch (error) {
-      console.error(
-        "Error parsing message from MC WS Server or handling it:",
-        error
-      );
-      // Update activity to show there's a communication issue with the MC server WS
-      updateBotActivity("MC: Data Error", ActivityType.Watching);
-    }
-  });
-
-  mcWsClient.on("close", (code, reason) => {
-    const reasonString = reason ? reason.toString() : "N/A";
-    console.log(
-      `Disconnected from Minecraft WebSocket server. Code: ${code}, Reason: ${reasonString}`
-    );
-    stopHeartbeat();
-    mcWsClient = null;
-
-    if (isShuttingDown) {
-      console.log(
-        "WebSocket closed as part of bot shutdown. No reconnection scheduled."
-      );
-    } else {
-      updateBotActivity("MC: Disconnected", ActivityType.Watching);
-      scheduleReconnect();
-    }
-  });
-
-  mcWsClient.on("error", (err) => {
-    console.error("Minecraft WebSocket connection error:", err.message);
-    // Ensure heartbeat is stopped.
-    stopHeartbeat();
-    if (
-      mcWsClient &&
-      mcWsClient.readyState !== WebSocket.OPEN &&
-      mcWsClient.readyState !== WebSocket.CONNECTING &&
-      mcWsClient.readyState !== WebSocket.CLOSING &&
-      mcWsClient.readyState !== WebSocket.CLOSED
-    ) {
-      console.log(
-        `WebSocket in unexpected state ${mcWsClient.readyState} after error, terminating.`
-      );
-      mcWsClient.terminate(); // This should trigger 'close'
-    }
-  });
-}
-
-function scheduleReconnect() {
-  if (isShuttingDown) {
-    console.log("Shutdown in progress, not scheduling reconnection.");
-    return;
-  }
-  console.log(
-    `Scheduling reconnection to MC WebSocket server in ${
-      RECONNECTION_DELAY_MS / 1000
-    } seconds...`
-  );
-  setTimeout(connectToMcServer, RECONNECTION_DELAY_MS);
-}
-
-function handleMcServerMessage(message) {
-  if (message.type === "status") {
-    updateBotActivity(`MC: ${message.message}`, ActivityType.Playing);
-  } else if (message.type === "error") {
-    // This is for errors reported by the MC server manager logic (e.g., "failed to start")
-    updateBotActivity(`MC Error: ${message.message}`, ActivityType.Playing);
-  } else {
-    console.warn(
-      "Unknown or unhandled MC Server message type for activity update:",
-      message
-    );
-  }
-}
-
-function parseMacAddress(macStr) {
-  if (!macStr || typeof macStr !== "string") {
-    throw new Error("MAC address string is undefined, empty, or not a string.");
-  }
-  const parts = macStr.split(/[:-]/);
-  if (parts.length !== 6) {
-    throw new Error(
-      `MAC address '${macStr}' must have 6 octets, found ${parts.length}`
-    );
-  }
-  for (const part of parts) {
-    if (!/^[0-9a-fA-F]{2}$/.test(part)) {
-      throw new Error(
-        `Invalid hex component '${part}' in MAC address '${macStr}'. Each octet must be 2 hex characters.`
-      );
-    }
-  }
-  return macStr;
-}
-
-async function handlePowerOnCommand(respondFunction) {
-  const macAddressStrEnv = process.env.MAC_ADDRESS;
-  if (!macAddressStrEnv) {
-    await respondFunction("MAC_ADDRESS environment variable not set!");
-    return;
-  }
-  try {
-    const validatedMacAddress = parseMacAddress(macAddressStrEnv);
-    wol.wake(validatedMacAddress);
-    await respondFunction(`Magic packet sent!`);
-  } catch (e) {
-    console.error("Failed to process power-on command:", e);
-    let userErrorMessage = e.message.toLowerCase().includes("mac address")
-      ? `Invalid MAC address format in environment: '${macAddressStrEnv}'. Error: ${e.message}. Expected format: HH:HH:HH:HH:HH:HH or HH-HH-HH-HH-HH-HH.`
-      : `Failed to send magic packet ${e.message || e}`;
-    await respondFunction(userErrorMessage);
-  }
-}
-
-async function attemptPowerOnForServerStart(channel) {
-  const macAddressStrEnv = process.env.MAC_ADDRESS;
-  if (!macAddressStrEnv) {
-    await channel.send(
-      "Cannot wake PC: MAC_ADDRESS environment variable not set!"
-    );
-    return false;
-  }
-  try {
-    const validatedMacAddress = parseMacAddress(macAddressStrEnv);
-    wol.wake(validatedMacAddress);
-    await channel.send(
-      `No connection to server manager. Attempting to wake PC and will retry connection...`
-    );
-    setTimeout(connectToMcServer, 20000); // Give PC time to boot before attempting WebSocket connection
-    return true;
-  } catch (e) {
-    console.error("Failed to wake PC for server start:", e);
-    await channel.send(`Failed to wake PC: ${e.message}`);
-    return false;
-  }
-}
+let isShuttingDown = false;
 
 const client = new Client({
   intents: [
@@ -280,184 +39,245 @@ const client = new Client({
   ],
 });
 
+// Utility functions
+const updateActivity = (text, type = ActivityType.Playing) => {
+  if (!client?.isReady()) return;
+  const status =
+    text.length > config.maxActivityLength
+      ? text.substring(0, config.maxActivityLength - 3) + "..."
+      : text;
+  client.user.setActivity(status, { type });
+};
+
+const isOwner = (userId) => userId === config.ownerId;
+
+const validateMacAddress = (mac) => {
+  if (!mac || typeof mac !== "string")
+    throw new Error("MAC address not provided");
+  const parts = mac.split(/[:-]/);
+  if (
+    parts.length !== 6 ||
+    !parts.every((part) => /^[0-9a-fA-F]{2}$/.test(part))
+  ) {
+    throw new Error(`Invalid MAC address format: ${mac}`);
+  }
+  return mac;
+};
+
+// WebSocket management
+const stopHeartbeat = () => {
+  [heartbeatIntervalId, pongTimeoutId].forEach((id) => id && clearTimeout(id));
+  heartbeatIntervalId = pongTimeoutId = null;
+};
+
+const startHeartbeat = () => {
+  stopHeartbeat();
+  if (mcWsClient?.readyState !== WebSocket.OPEN) return;
+
+  heartbeatIntervalId = setInterval(() => {
+    if (mcWsClient?.readyState === WebSocket.OPEN) {
+      mcWsClient.send(JSON.stringify({ type: "ping" }));
+      pongTimeoutId = setTimeout(
+        () => mcWsClient?.terminate(),
+        config.pongTimeout
+      );
+    } else {
+      stopHeartbeat();
+    }
+  }, config.heartbeatInterval);
+};
+
+const connectToMcServer = () => {
+  if (isShuttingDown || mcWsClient?.readyState <= WebSocket.OPEN) return;
+
+  console.log("Connecting to Minecraft WebSocket server...");
+  updateActivity("MC: Connecting...", ActivityType.Watching);
+
+  mcWsClient = new WebSocket(config.wsUrl);
+
+  mcWsClient.on("open", () => {
+    console.log("Connected to Minecraft WebSocket server");
+    updateActivity("MC: Connected", ActivityType.Watching);
+    startHeartbeat();
+  });
+
+  mcWsClient.on("message", (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      console.log("Received from MC WS:", message);
+
+      if (message.type === "pong") {
+        clearTimeout(pongTimeoutId);
+        pongTimeoutId = null;
+        return;
+      }
+
+      if (message.type === "status") updateActivity(`MC: ${message.message}`);
+      else if (message.type === "error")
+        updateActivity(`MC Error: ${message.message}`);
+    } catch (error) {
+      console.error("Error parsing MC WS message:", error);
+      updateActivity("MC: Data Error", ActivityType.Watching);
+    }
+  });
+
+  mcWsClient.on("close", (code, reason) => {
+    console.log(`MC WebSocket closed: ${code} - ${reason || "N/A"}`);
+    stopHeartbeat();
+    mcWsClient = null;
+
+    if (!isShuttingDown) {
+      updateActivity("MC: Disconnected", ActivityType.Watching);
+      setTimeout(connectToMcServer, config.reconnectDelay);
+    }
+  });
+
+  mcWsClient.on("error", (err) => {
+    console.error("MC WebSocket error:", err.message);
+    stopHeartbeat();
+  });
+};
+
+// Command handlers
+const sendMagicPacket = async (respondFn) => {
+  if (!config.macAddress) return respondFn("MAC_ADDRESS not configured");
+
+  try {
+    wol.wake(validateMacAddress(config.macAddress));
+    await respondFn("Magic packet sent!");
+  } catch (error) {
+    console.error("Failed to send magic packet:", error);
+    await respondFn(`Failed to send magic packet: ${error.message}`);
+  }
+};
+
+const handleServerAction = async (interaction, action) => {
+  if (mcWsClient?.readyState === WebSocket.OPEN) {
+    mcWsClient.send(JSON.stringify({ type: action }));
+    await interaction.reply({
+      content: `Attempting to ${action.replace("server", "")} server...`,
+      flags: MessageFlags.Ephemeral,
+    });
+  } else if (action === "startserver") {
+    await handleOfflineServerStart(interaction);
+  } else {
+    await interaction.reply({
+      content: "Not connected to server manager",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+};
+
+const handleOfflineServerStart = async (interaction) => {
+  if (!config.macAddress) {
+    return interaction.reply({
+      content: "Cannot wake PC: MAC_ADDRESS not configured",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  try {
+    wol.wake(validateMacAddress(config.macAddress));
+    await interaction.channel.send("Attempting to wake PC and connect...");
+    setTimeout(connectToMcServer, config.wakeRetryDelay);
+    await interaction.reply({
+      content: "Wake-on-LAN initiated",
+      flags: MessageFlags.Ephemeral,
+    });
+  } catch (error) {
+    console.error("Failed to wake PC:", error);
+    await interaction.reply({
+      content: `Failed to wake PC: ${error.message}`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+};
+
+// Event handlers
 client.on("ready", () => {
-  console.log(`${client.user.tag} is connected!`);
-  client.user.setActivity("Booting up...", { type: ActivityType.Playing });
+  console.log(`${client.user.tag} connected!`);
+  updateActivity("Starting...");
   connectToMcServer();
 });
 
 client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
+  if (message.author.bot || !isOwner(message.author.id)) return;
 
-  function isOwner(authorId) {
-    if (!OWNER_DISCORD_ID) {
-      console.error("OWNER_DISCORD_ID not set! Cannot verify owner.");
-      message
-        .reply("Bot owner not configured. This command is disabled.")
-        .catch(() => {});
-      return false;
-    }
-    if (authorId !== OWNER_DISCORD_ID) {
-      message
-        .reply("You are not authorized to use this command.")
-        .catch(() => {});
-      return false;
-    }
-    return true;
-  }
+  const commands = {
+    "!poweron": () =>
+      sendMagicPacket((content) => message.channel.send(content)),
+    "!buttons": () => {
+      const buttons = [
+        new ButtonBuilder()
+          .setCustomId("startserver")
+          .setLabel("Start Server")
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId("stopserver")
+          .setLabel("Stop Server")
+          .setStyle(ButtonStyle.Danger),
+      ];
+      return message.channel.send({
+        components: [new ActionRowBuilder().addComponents(...buttons)],
+      });
+    },
+  };
 
-  if (
-    message.content.startsWith("!buttons") ||
-    message.content.startsWith("!poweron") ||
-    message.content.startsWith("!startserver") ||
-    message.content.startsWith("!stopserver")
-  ) {
-  }
-
-  if (message.content === "!poweron") {
-    if (!isOwner(message.author.id)) return;
-    await handlePowerOnCommand((content) => message.channel.send(content));
-  }
-
-  if (message.content === "!buttons") {
-    if (!isOwner(message.author.id)) return;
-    const startServerButton = new ButtonBuilder()
-      .setCustomId("startserver")
-      .setLabel("Start Minecraft Server")
-      .setStyle(ButtonStyle.Primary);
-    const stopServerButton = new ButtonBuilder()
-      .setCustomId("stopserver")
-      .setLabel("Stop Minecraft Server")
-      .setStyle(ButtonStyle.Danger);
-    const row = new ActionRowBuilder().addComponents(
-      startServerButton,
-      stopServerButton
-    );
-    await message.channel.send({
-      content: "Minecraft Server Controls:",
-      components: [row],
-    });
-  }
+  const command = commands[message.content];
+  if (command) await command();
 });
 
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isButton()) return;
-
-  if (interaction.customId === "stopserver") {
-    if (!OWNER_DISCORD_ID) {
-      console.error("OWNER_DISCORD_ID not set for button interaction.");
-      await interaction
-        .reply({
-          content: "Bot owner not configured. This interaction is disabled.",
-          flags: MessageFlags.Ephemeral,
-        })
-        .catch(console.error);
-      return;
+  if (!interaction.isButton() || !isOwner(interaction.user.id)) {
+    if (interaction.isButton()) {
+      await interaction.reply({
+        content: "Unauthorized",
+        flags: MessageFlags.Ephemeral,
+      });
     }
-    if (interaction.user.id !== OWNER_DISCORD_ID) {
-      await interaction
-        .reply({
-          content: "You are not authorized to use this button.",
-          flags: MessageFlags.Ephemeral,
-        })
-        .catch(console.error);
-      return;
-    }
+    return;
   }
 
-  if (interaction.customId === "stopserver") {
-    if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
-      mcWsClient.send(JSON.stringify({ type: "stopserver" }));
-      await interaction.reply({
-        content: "Attempting to stop Minecraft server...",
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.reply({
-        content:
-          "Not connected to Minecraft server manager. Cannot stop server.",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-  } else if (interaction.customId === "startserver") {
-    if (mcWsClient && mcWsClient.readyState === WebSocket.OPEN) {
-      mcWsClient.send(JSON.stringify({ type: "startserver" }));
-      await interaction.reply({
-        content: "Attempting to start Minecraft server...",
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      const wakeAttempted = await attemptPowerOnForServerStart(
-        interaction.channel // Send wake status messages to this channel
-      );
-      if (wakeAttempted) {
-        await interaction.reply({
-          content:
-            "Wake-on-LAN initiated. Will attempt to connect to server manager shortly.",
-          flags: MessageFlags.Ephemeral,
-        });
-      } else {
-        // If wake attempt failed (e.g. MAC not set, or other error in attemptPowerOn... )
-        await interaction.reply({
-          content:
-            "Not connected to Minecraft server manager and PC wake-up failed or was not possible. Please check logs or try !poweron if authorized.",
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-    }
+  if (["startserver", "stopserver"].includes(interaction.customId)) {
+    await handleServerAction(interaction, interaction.customId);
   }
 });
 
-async function startBot() {
-  if (!TOKEN) {
-    console.error("DISCORD_TOKEN environment variable is not set. Exiting.");
-    process.exit(1);
-  }
-  if (!OWNER_DISCORD_ID) {
-    console.warn(
-      "OWNER_DISCORD_ID environment variable is not set. Owner-specific commands will not work."
-    );
-    // Depending on how critical owner-only functions are, you might still exit:
+// Startup and shutdown
+const startBot = async () => {
+  if (!config.token || !config.ownerId) {
     console.error(
-      "OWNER_DISCORD_ID environment variable is not set. Exiting, as it's crucial for most bot functions."
+      "Missing required environment variables: DISCORD_TOKEN, OWNER_DISCORD_ID"
     );
     process.exit(1);
   }
 
   try {
-    await client.login(TOKEN);
+    await client.login(config.token);
   } catch (error) {
-    console.error("Client login error:", error);
+    console.error("Login failed:", error);
     process.exit(1);
   }
-}
+};
 
-startBot();
-
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-
-function shutdown(signal) {
-  console.log(`Received ${signal}. Bot and MC WS Client are shutting down...`);
+const shutdown = (signal) => {
+  console.log(`Received ${signal}. Shutting down...`);
   isShuttingDown = true;
-  updateBotActivity("Bot Shutting Down...", ActivityType.Watching);
+  updateActivity("Shutting Down...", ActivityType.Watching);
   stopHeartbeat();
 
-  if (mcWsClient) {
-    if (mcWsClient.readyState === WebSocket.OPEN) {
-      mcWsClient.close(1000, "Bot shutting down");
-    } else if (
-      mcWsClient.readyState === WebSocket.CONNECTING ||
-      mcWsClient.readyState !== WebSocket.CLOSED
-    ) {
-      mcWsClient.terminate();
-    }
-    mcWsClient = null; // Ensure it's nulled after attempting close/terminate
+  if (mcWsClient?.readyState === WebSocket.OPEN) {
+    mcWsClient.close(1000, "Bot shutting down");
+  } else if (mcWsClient) {
+    mcWsClient.terminate();
   }
+  mcWsClient = null;
 
-  if (client && client.isReady()) {
-    client.destroy();
-  }
-  console.log("Discord client destroyed. Exiting in 1 second...");
+  client.destroy();
   setTimeout(() => process.exit(0), 1000);
-}
+};
+
+["SIGINT", "SIGTERM"].forEach((signal) =>
+  process.on(signal, () => shutdown(signal))
+);
+startBot();
