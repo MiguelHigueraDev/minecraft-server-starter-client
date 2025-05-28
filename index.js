@@ -178,7 +178,6 @@ const handleOfflineServerStart = async (interaction) => {
 
   try {
     wol.wake(validateMacAddress(config.macAddress));
-    await interaction.channel.send("Attempting to wake PC and connect...");
     setTimeout(connectToMcServer, config.wakeRetryDelay);
     await interaction.reply({
       content: "Wake-on-LAN initiated",
@@ -229,7 +228,7 @@ client.on("messageCreate", async (message) => {
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton() || !isOwner(interaction.user.id)) {
-    if (interaction.isButton()) {
+    if (interaction.isButton() && interaction.customId === "stopserver") {
       await interaction.reply({
         content: "Unauthorized",
         flags: MessageFlags.Ephemeral,
