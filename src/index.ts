@@ -27,7 +27,7 @@ if (!process.env.MAC_ADDRESS) {
 export const CONFIG = {
   token: process.env.DISCORD_TOKEN,
   ownerId: process.env.OWNER_DISCORD_ID,
-  wsUrl: process.env.SERVER_WS_URL ?? "ws://localhost:8080",
+  wsUrl: process.env.MC_SERVER_WS_URL ?? "ws://localhost:8080",
   macAddress: process.env.MAC_ADDRESS,
   // In milliseconds
   reconnectDelay: 10000,
