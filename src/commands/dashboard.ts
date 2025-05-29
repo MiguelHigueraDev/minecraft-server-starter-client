@@ -3,7 +3,10 @@ import {
   Awaitable,
   Command,
 } from "@sapphire/framework";
-import { ChatInputCommandInteraction } from "discord.js";
+import {
+  ChatInputCommandInteraction,
+  InteractionContextType,
+} from "discord.js";
 import {
   getServerStatus,
   makeStatusEmbed,
@@ -22,6 +25,7 @@ export class DashboardCommand extends Command {
       builder
         .setName("dashboard")
         .setDescription("Send a dashboard with live stats about the server.")
+        .setContexts([InteractionContextType.Guild])
     );
   }
 

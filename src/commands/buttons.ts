@@ -3,7 +3,12 @@ import {
   Awaitable,
   Command,
 } from "@sapphire/framework";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  InteractionContextType,
+} from "discord.js";
 import { START_SERVER, STOP_SERVER } from "../lib/constants.js";
 
 export class ButtonsCommand extends Command {
@@ -18,6 +23,7 @@ export class ButtonsCommand extends Command {
       builder
         .setName("buttons")
         .setDescription("Send the Minecraft server start and stop buttons.")
+        .setContexts([InteractionContextType.Guild])
     );
   }
 
