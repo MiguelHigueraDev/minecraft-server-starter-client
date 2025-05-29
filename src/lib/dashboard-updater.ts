@@ -6,7 +6,7 @@ import {
   MC_ICON_API_URL,
   MC_STATUS_API_URL,
 } from "./constants";
-import { EmbedBuilder } from "discord.js";
+import { EmbedBuilder, TextChannel } from "discord.js";
 import { McStatusResponse, type SavedMessageData } from "./types";
 import { container } from "@sapphire/framework";
 
@@ -45,16 +45,30 @@ export const scheduleDashboardUpdate = async (): Promise<void> => {
   const messageData = await readDashboardMessageIds();
   if (!messageData) return;
 
-  const channel = container.client.channels.cache.get(messageData.channelId);
+  let channel: TextChannel | undefined;
+  try {
+    const fetchedChannel = await container.client.channels.fetch(
+      messageData.channelId
+    );
+    if (
+      fetchedChannel &&
+      fetchedChannel.isTextBased() &&
+      !fetchedChannel.isDMBased()
+    ) {
+      channel = fetchedChannel as TextChannel;
+    }
+  } catch {
+    return;
+  }
 
-  if (!channel || !channel.isTextBased()) return;
+  if (!channel) return;
 
   const status = await getServerStatus();
   if (!status) return;
 
   const embed = makeStatusEmbed(status);
   try {
-    const message = channel.messages.cache.get(messageData.messageId);
+    const message = await channel.messages.fetch(messageData.messageId);
     if (!message) return;
     await message.edit({ embeds: [embed] });
   } catch (error) {
