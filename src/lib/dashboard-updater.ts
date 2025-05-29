@@ -88,11 +88,20 @@ export const makeStatusEmbed = (status: McStatusResponse): EmbedBuilder => {
     .setTimestamp(new Date(status.retrieved_at));
 
   if (status.online && status.players?.online) {
-    embed.addFields({
-      name: "Online players",
-      value: status.players?.online.toString() || "0",
-      inline: true,
-    });
+    embed.addFields(
+      {
+        name: "Online players",
+        value: `${status.players?.online.toString()} / ${
+          status.players?.max.toString() || "0"
+        }`,
+        inline: true,
+      },
+      {
+        name: "Player list",
+        value: status.players?.list.join(", ") || "No players online",
+        inline: true,
+      }
+    );
   }
 
   if (status.icon) {
