@@ -43,3 +43,8 @@ type McStatusMotd = {
   clean: string;
   html: string;
 };
+
+export type SavedMessageData = {
+  messageId: string;
+  channelId: string;
+};
