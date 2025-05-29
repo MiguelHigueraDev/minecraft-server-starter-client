@@ -24,11 +24,17 @@ if (!process.env.MAC_ADDRESS) {
   process.exit(1);
 }
 
+if (!process.env.MC_SERVER_HOST) {
+  console.error("MC_SERVER_HOST is not set in the environment variables.");
+  process.exit(1);
+}
+
 export const CONFIG = {
   token: process.env.DISCORD_TOKEN,
   ownerId: process.env.OWNER_DISCORD_ID,
-  wsUrl: process.env.MC_SERVER_WS_URL ?? "ws://localhost:8080",
+  wsUrl: process.env.MC_SERVER_WS_URL,
   macAddress: process.env.MAC_ADDRESS,
+  mcServerHost: process.env.MC_SERVER_HOST,
   // In milliseconds
   reconnectDelay: 10000,
   heartbeatInterval: 5000,
