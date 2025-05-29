@@ -98,7 +98,9 @@ export const makeStatusEmbed = (status: McStatusResponse): EmbedBuilder => {
       },
       {
         name: "Player list",
-        value: status.players?.list.join(", ") || "No players online",
+        value:
+          status.players?.list.map((player) => player.name_raw).join(", ") ||
+          "No players online",
         inline: true,
       }
     );
