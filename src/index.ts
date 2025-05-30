@@ -83,3 +83,26 @@ client
     console.error("Failed to login:", error);
     process.exit(1);
   });
+
+// Graceful shutdowns, kill the Discord client and the WebSocket connection
+const shutdown = async (signal: string) => {
+  if (container.isShuttingDown) return;
+  console.log(`Received ${signal}, shutting down gracefully...`);
+  container.isShuttingDown = true;
+  try {
+    if (
+      container.mcWsClient &&
+      container.mcWsClient.readyState === WebSocket.OPEN
+    ) {
+      container.mcWsClient.close(1001, "Server shutting down");
+    }
+    if (client.isReady()) {
+      await client.destroy();
+    }
+  } finally {
+    process.exit(0);
+  }
+};
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
