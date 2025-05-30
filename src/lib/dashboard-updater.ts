@@ -83,27 +83,25 @@ export const makeStatusEmbed = (status: McStatusResponse): EmbedBuilder => {
     .setColor(status.online ? "Green" : "Red")
     .setDescription(
       `Server is currently **${status.online ? "online" : "offline"}**\n` +
-        `Address: \`${status.host}\`\n`
+        `Address: \`${status.host}\`\n` +
+        `${
+          status.online && status.players?.online
+            ? `Online players: ${status.players?.list
+                .map((player) => player.name_raw)
+                .join(", ")}`
+            : ""
+        }`
     )
     .setTimestamp(new Date(status.retrieved_at));
 
   if (status.online && status.players?.online) {
-    embed.addFields(
-      {
-        name: "Online players",
-        value: `${status.players?.online.toString()} / ${
-          status.players?.max.toString() || "0"
-        }`,
-        inline: true,
-      },
-      {
-        name: "Player list",
-        value:
-          status.players?.list.map((player) => player.name_raw).join(", ") ||
-          "No players online",
-        inline: true,
-      }
-    );
+    embed.addFields({
+      name: "Online players",
+      value: `${status.players?.online.toString()} / ${
+        status.players?.max.toString() || "0"
+      }`,
+      inline: true,
+    });
   }
 
   if (status.icon) {
