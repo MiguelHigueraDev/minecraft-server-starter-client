@@ -8,6 +8,7 @@ import { START_SERVER, STOP_SERVER } from "../lib/constants.js";
 import { WebSocket } from "ws";
 import { wakePc } from "../lib/helpers.js";
 import { connectToMcWsServer } from "../lib/ws.js";
+import { CONFIG } from "../index.js";
 
 export class ServerButtonsHandler extends InteractionHandler {
   public constructor(
@@ -54,6 +55,13 @@ export class ServerButtonsHandler extends InteractionHandler {
 
     if (interaction.customId === STOP_SERVER) {
       if (container.mcWsClient?.readyState !== WebSocket.OPEN) return;
+      if (interaction.user.id !== CONFIG.ownerId) {
+        await interaction.reply({
+          content: "You are not authorized to stop the server.",
+          flags: [MessageFlags.Ephemeral],
+        });
+        return;
+      }
       container.mcWsClient?.send(JSON.stringify({ type: STOP_SERVER }));
       await interaction.reply({
         content: "Stopping the Minecraft server...",
