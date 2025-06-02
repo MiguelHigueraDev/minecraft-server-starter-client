@@ -1,11 +1,11 @@
 # Discord WOL Bot + Minecraft Server Starter
 
-A Discord bot that manages a Minecraft servers with Wake-on-LAN (WOL) support, real-time status monitoring, and remote server control capabilities.
+A Discord bot that manages a Minecraft server with Wake-on-LAN (WOL) support, real-time status monitoring, and remote server control capabilities.
 
 ## Features
 
 - 🔌 **Wake-on-LAN Support**: Wake up sleeping or powered-off computers remotely
-- 🎮 **Server Control**: Start, stop, and manage Minecraft servers through Discord commands and buttons
+- 🎮 **Server Control**: Start, stop, and manage a Minecraft server through Discord commands and buttons
 - 🔄 **Auto-reconnection**: Robust WebSocket connection with automatic reconnection
 - 📱 **Dashboard**: Live-updating embed with server information
 - ⚡ **Quick Actions**: Button-based interface for common server operations
