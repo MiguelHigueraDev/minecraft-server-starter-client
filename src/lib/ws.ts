@@ -2,6 +2,7 @@ import { container } from "@sapphire/framework";
 import { CONFIG } from "../index.js";
 import { updateActivity } from "./helpers.js";
 import WebSocket from "ws";
+import { notifyOwner } from "./owner-notifier.js";
 
 const stopHeartbeat = () => {
   [container.heartbeatIntervalId, container.pongTimeoutId].forEach(
@@ -62,6 +63,7 @@ export const connectToMcWsServer = () => {
       }
 
       if (message.type === "status") updateActivity(message.message);
+      if (message.type === "player") notifyOwner(message.message);
       else if (message.type === "error") {
         console.error("Error from Minecraft WebSocket server:", message.error);
       }
