@@ -33,6 +33,14 @@ export class ServerButtonsHandler extends InteractionHandler {
 
   public async run(interaction: ButtonInteraction) {
     const action = interaction.customId;
+    if (!CONFIG.isEnabled) {
+      await interaction.reply({
+        content: "The bot is disabled for now. Please contact the owner.",
+        flags: [MessageFlags.Ephemeral],
+      });
+      return;
+    }
+
     if (action === START_SERVER) {
       if (container.mcWsClient?.readyState === WebSocket.OPEN) {
         // PC is already on, just send the start command

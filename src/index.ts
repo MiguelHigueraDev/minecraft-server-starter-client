@@ -30,6 +30,7 @@ if (!process.env.MC_SERVER_HOST) {
 }
 
 export const CONFIG = {
+  isEnabled: true,
   token: process.env.DISCORD_TOKEN,
   ownerId: process.env.OWNER_DISCORD_ID,
   wsUrl: process.env.MC_SERVER_WS_URL,
