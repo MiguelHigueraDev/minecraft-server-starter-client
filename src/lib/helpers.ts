@@ -10,7 +10,7 @@ export const wakePc = () => {
 export const isOwner = (userId: string) => userId === CONFIG.ownerId;
 
 export const updateActivity = (activity: string) => {
-  if (!container.client.isReady()) return;
+  if (!container.client.isReady() || !CONFIG.isEnabled) return;
   const status =
     activity.length > CONFIG.maxActivityLength
       ? activity.substring(0, CONFIG.maxActivityLength - 3) + "..."
