@@ -9,6 +9,7 @@ import {
 import { EmbedBuilder, TextChannel } from "discord.js";
 import { McStatusResponse, type SavedMessageData } from "./types";
 import { container } from "@sapphire/framework";
+import { logger } from "./helpers";
 
 const readDashboardMessageIds = async (): Promise<SavedMessageData | null> => {
   try {
@@ -20,7 +21,7 @@ const readDashboardMessageIds = async (): Promise<SavedMessageData | null> => {
     }
     return null;
   } catch (err) {
-    console.error("Error reading dashboard message ID:", err);
+    logger("error", `Error reading dashboard message ID: ${err}`, false);
     return null;
   }
 };
@@ -37,7 +38,7 @@ export const writeDashboardMessageIds = async (
       "utf8"
     );
   } catch (err) {
-    console.error("Error writing dashboard message ID:", err);
+    logger("error", `Error writing dashboard message ID: ${err}`, false);
   }
 };
 
@@ -72,7 +73,7 @@ export const scheduleDashboardUpdate = async (): Promise<void> => {
     if (!message) return;
     await message.edit({ embeds: [embed] });
   } catch (error) {
-    console.error("Error updating dashboard message:", error);
+    logger("error", `Error updating dashboard message: ${error}`, false);
   }
 };
 
@@ -128,7 +129,7 @@ export const getServerStatus = async (): Promise<McStatusResponse | null> => {
     const data: McStatusResponse = await response.json();
     return data;
   } catch (error) {
-    console.error("Error fetching Minecraft server status:", error);
+    logger("error", `Error fetching Minecraft server status: ${error}`, false);
     return null;
   }
 };

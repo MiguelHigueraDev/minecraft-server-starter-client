@@ -6,7 +6,7 @@ import {
 import { ButtonInteraction, MessageFlags } from "discord.js";
 import { START_SERVER, STOP_SERVER } from "../lib/constants.js";
 import { WebSocket } from "ws";
-import { wakePc } from "../lib/helpers.js";
+import { logger, wakePc } from "../lib/helpers.js";
 import { connectToMcWsServer } from "../lib/ws.js";
 import { CONFIG } from "../index.js";
 
@@ -41,6 +41,8 @@ export class ServerButtonsHandler extends InteractionHandler {
       return;
     }
 
+    const { username, displayName } = interaction.user;
+
     if (action === START_SERVER) {
       if (container.mcWsClient?.readyState === WebSocket.OPEN) {
         // PC is already on, just send the start command
@@ -49,8 +51,15 @@ export class ServerButtonsHandler extends InteractionHandler {
           content: "Attempting to start the Minecraft server...",
           flags: [MessageFlags.Ephemeral],
         });
+        logger(
+          "log",
+          `PC is already on, sending start command triggered by ${username} (${displayName})`
+        );
       } else if (action === START_SERVER) {
-        console.log("PC is off, waking it up and connecting to the server");
+        logger(
+          "log",
+          `PC is off, waking it up and connecting to the server. Triggered by ${username} (${displayName})`
+        );
         // PC is off, wake it up
         wakePc();
         connectToMcWsServer();
@@ -75,6 +84,10 @@ export class ServerButtonsHandler extends InteractionHandler {
         content: "Stopping the Minecraft server...",
         flags: [MessageFlags.Ephemeral],
       });
+      logger(
+        "log",
+        `Stopping the Minecraft server. Triggered by ${username} (${displayName})`
+      );
     }
   }
 }

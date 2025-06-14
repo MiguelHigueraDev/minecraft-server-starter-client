@@ -1,6 +1,6 @@
 import { container } from "@sapphire/framework";
 import { CONFIG } from "../index.js";
-import { updateActivity } from "./helpers.js";
+import { logger, updateActivity } from "./helpers.js";
 import WebSocket from "ws";
 import { notifyOwner } from "./owner-notifier.js";
 
@@ -38,13 +38,13 @@ export const connectToMcWsServer = () => {
     return;
   }
 
-  console.log("Connecting to Minecraft WebSocket server...");
+  logger("log", "Connecting to Minecraft WebSocket server...", false);
   updateActivity("Connecting to Minecraft server...");
 
   container.mcWsClient = new WebSocket(CONFIG.wsUrl);
 
   container.mcWsClient.on("open", () => {
-    console.log("Connected to Minecraft WebSocket server.");
+    logger("log", "Connected to Minecraft WebSocket server.", false);
     updateActivity("Connected to Minecraft server");
     startHeartbeat();
   });
@@ -52,7 +52,11 @@ export const connectToMcWsServer = () => {
   container.mcWsClient.on("message", (data) => {
     try {
       const message = JSON.parse(data.toString());
-      console.log("Received message from Minecraft WebSocket server:", message);
+      logger(
+        "log",
+        `Received message from Minecraft WebSocket server: ${message}`,
+        false
+      );
 
       if (message.type === "pong") {
         if (container.pongTimeoutId) {
@@ -65,21 +69,26 @@ export const connectToMcWsServer = () => {
       if (message.type === "status") updateActivity(message.message);
       if (message.type === "player") notifyOwner(message.message);
       else if (message.type === "error") {
-        console.error("Error from Minecraft WebSocket server:", message.error);
+        logger(
+          "error",
+          `Error from Minecraft WebSocket server: ${message.error}`
+        );
       }
     } catch (error) {
-      console.error(
-        "Error processing message from Minecraft WebSocket server:",
-        error
+      logger(
+        "error",
+        `Error processing message from Minecraft WebSocket server: ${error}`
       );
     }
   });
 
   container.mcWsClient.on("close", (code, reason) => {
-    console.log(
+    logger(
+      "log",
       `Minecraft WebSocket server connection closed: ${code} - ${
         reason || "N/A"
-      }`
+      }`,
+      false
     );
     updateActivity("Disconnected from Minecraft server");
     stopHeartbeat();
@@ -91,7 +100,7 @@ export const connectToMcWsServer = () => {
   });
 
   container.mcWsClient.on("error", (error) => {
-    console.error("Error in Minecraft WebSocket connection:", error);
+    logger("error", `Error in Minecraft WebSocket connection: ${error}`, false);
     stopHeartbeat();
   });
 };
