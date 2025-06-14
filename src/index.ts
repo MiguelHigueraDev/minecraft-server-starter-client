@@ -3,6 +3,7 @@ import { ActivityType, GatewayIntentBits } from "discord.js";
 import { WebSocket } from "ws";
 import "dotenv/config";
 import { connectToMcWsServer } from "./lib/ws.js";
+import { logger } from "./lib/helpers.js";
 
 if (!process.env.DISCORD_TOKEN) {
   console.error("DISCORD_TOKEN is not set in the environment variables.");
@@ -81,14 +82,14 @@ client
   .login(CONFIG.token)
   .then(connectToMcWsServer)
   .catch((error) => {
-    console.error("Failed to login:", error);
+    logger("error", `Failed to login: ${error}`, false);
     process.exit(1);
   });
 
 // Graceful shutdowns, kill the Discord client and the WebSocket connection
 const shutdown = async (signal: string) => {
   if (container.isShuttingDown) return;
-  console.log(`Received ${signal}, shutting down gracefully...`);
+  logger("log", `Received ${signal}, shutting down gracefully...`, false);
   container.isShuttingDown = true;
   try {
     if (
