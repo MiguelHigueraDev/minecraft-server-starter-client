@@ -31,3 +31,6 @@ export const logger = (type: LogType, message: string, notify = true) => {
     notifyOwner(`[${type.toUpperCase()}] (${timestamp}) ${message}`);
   }
 };
+
+export const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));

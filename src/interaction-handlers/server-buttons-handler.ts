@@ -6,7 +6,7 @@ import {
 import { ButtonInteraction, MessageFlags } from "discord.js";
 import { START_SERVER, STOP_SERVER } from "../lib/constants.js";
 import { WebSocket } from "ws";
-import { logger, wakePc } from "../lib/helpers.js";
+import { logger, sleep, wakePc } from "../lib/helpers.js";
 import { connectToMcWsServer } from "../lib/ws.js";
 import { CONFIG } from "../index.js";
 
@@ -51,6 +51,7 @@ export class ServerButtonsHandler extends InteractionHandler {
           content: "Attempting to start the Minecraft server...",
           flags: [MessageFlags.Ephemeral],
         });
+        connectToMcWsServer();
         logger(
           "log",
           `PC is already on, sending start command triggered by ${username} (${displayName})`
@@ -62,11 +63,14 @@ export class ServerButtonsHandler extends InteractionHandler {
         );
         // PC is off, wake it up
         wakePc();
-        connectToMcWsServer();
         await interaction.reply({
           content: "Waking up the PC and connecting to the Minecraft server...",
           flags: [MessageFlags.Ephemeral],
         });
+        // After replying, wait 1 minute and connect to the server, try starting it...
+        await sleep(60000);
+        connectToMcWsServer();
+        container.mcWsClient?.send(JSON.stringify({ type: START_SERVER }));
       }
     }
 
