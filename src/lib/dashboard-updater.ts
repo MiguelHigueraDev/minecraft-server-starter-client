@@ -92,23 +92,21 @@ export const makeStatusEmbed = (status: McStatusResponse): EmbedBuilder => {
             : ""
         }`
     )
+    .addFields({
+      name: "Address",
+      value: `\`${status.host}\``,
+      inline: true,
+    })
     .setTimestamp(new Date(status.retrieved_at));
 
   if (status.online && status.players?.online) {
-    embed.addFields(
-      {
-        name: "Player count",
-        value: `${status.players?.online.toString()} / ${
-          status.players?.max.toString() || "0"
-        }`,
-        inline: true,
-      },
-      {
-        name: "Address",
-        value: `\`${status.host}\``,
-        inline: true,
-      }
-    );
+    embed.addFields({
+      name: "Player count",
+      value: `${status.players?.online.toString()} / ${
+        status.players?.max.toString() || "0"
+      }`,
+      inline: true,
+    });
   }
 
   if (status.icon) {
